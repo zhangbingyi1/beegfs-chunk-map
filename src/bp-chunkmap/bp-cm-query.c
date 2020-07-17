@@ -35,12 +35,12 @@ int main(int argc, char **argv)
                 &filename_len,
                 &errmsg);
         leveldb_free(errmsg);
-        char filename0[PATH_MAX];
-        char filename_fixed[PATH_MAX];
         if (filename == NULL) {
 	  fprintf(stderr, "Unknown %s\n", chunk_name);
 	} else {
-	  snprintf(filename0, sizeof(filename0), "%.*s", (int)filename_len, filename);
+          char filename0[PATH_MAX];
+          size_t filename0_len = filename_len + 1 > PATH_MAX ? PATH_MAX : filename_len + 1;
+          snprintf(filename0, filename0_len, "%s", filename);
 	  printf("%s\n", filename0);
 	}
     }
