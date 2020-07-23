@@ -13,8 +13,8 @@
 
 #undef PROFILE
 #define GETENTRY_THREADS 32
-//#define GETENTRY_COMMAND   "cat output.%d | beegfs-ctl --getentryinfo --nomappings --unmounted -"
-#define GETENTRY_COMMAND   "cat output.%d | while read line ;do echo 'Path: '$line; echo $line| beegfs-ctl --getentryinfo --nomappings --unmounted -; done"
+#define GETENTRY_COMMAND   "cat output.%d | beegfs-ctl --getentryinfo --nomappings --unmounted -"
+//#define GETENTRY_COMMAND   "cat output.%d | while read line ;do echo 'Path: '$line; echo $line| beegfs-ctl --getentryinfo --nomappings --unmounted -; done"
 #define PATH_IDENTIFIER    "Path: "
 #define ENTRYID_IDENTIFIER "EntryID: "
 #define LINE_BUFSIZE PATH_MAX
@@ -31,10 +31,13 @@ struct arg_struct {
 void * getentry_worker (void * x) {
 
   char line[LINE_BUFSIZE];
+  char linebuf[LINE_BUFSIZE];
   long linenr;
   FILE *pipe;
+  FILE *getline_pipe;
   char cmd[PATH_MAX];
   struct arg_struct *args = (struct arg_struct *) x;
+  char filename[PATH_MAX];
 
   #ifdef PROFILE
     perf_entry_t * perf_getentry, * perf_leveldb, * perf_strcmp;
@@ -64,12 +67,15 @@ void * getentry_worker (void * x) {
     exit (EXIT_FAILURE);        /* return with exit code indicating error */
   }
 
+  sprintf(filename, "output.%d", args->thread_id);
+  getline_pipe = fopen(filename, "r");
+  
   /* Read script output from the pipe line by line */
-  linenr = 1;
   while (fgets(line, LINE_BUFSIZE, pipe) != NULL) {
     #ifdef PROFILE
       perf_update_start(perf_strcmp);  
     #endif
+
     if (strncmp(line, PATH_IDENTIFIER, path_identifier_len) == 0) {
       strcpy(path_line, line + (int) path_identifier_len);
       
@@ -80,6 +86,10 @@ void * getentry_worker (void * x) {
 
       // Remove newline
       entryid_line[(int)strlen(entryid_line)-1] = '\0';
+
+      fgets(linebuf, LINE_BUFSIZE, getline_pipe);
+      strcpy(path_line, linebuf);
+      path_line[(int)strlen(path_line)-1] = '\0';
 
       #ifdef PROFILE
         perf_update_tick(perf_strcmp);  
@@ -97,12 +107,12 @@ void * getentry_worker (void * x) {
     #ifdef PROFILE
       perf_update_tick(perf_strcmp);
     #endif
-    ++linenr;
     
   }
     
   /* Once here, out of the loop, the script has ended. */
   pclose(pipe); /* Close the pipe */
+  fclose(getline_pipe);
 
   #ifdef PROFILE
     perf_update_tick(perf_getentry);
@@ -170,3 +180,4 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+
